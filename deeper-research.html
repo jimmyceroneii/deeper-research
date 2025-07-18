@@ -1,0 +1,339 @@
+<!doctype html>
+
+<html>
+    <head>
+        <title>Prompt Generation</title>
+        <script>
+            let prompts = [];
+            let urls = [];
+            let finalUrls = [];
+            let currentUrlIndex = 0;
+
+            const MAX_RETRIES = 100;
+            const INITIAL_BACKOFF = 60010; // in milliseconds
+            const EXCLUDED_DOMAINS = [
+                "en.wikipedia.org",
+                "simple.wikipedia.org",
+                "wikipedia.org",
+                "linkedin.com",
+                "quora.com",
+                "reddit.com",
+                "acm.org",
+                "dl.acm.org",
+                "journals.sagepub.com",
+                "link.springer.com",
+                "springer.com",
+                "sciencedirect.com",
+                "jstor.org",
+                "academia.edu",
+            ];
+
+            async function fetchAndDisplayPrompts(topic) {
+                const promptDiv = document.getElementById(
+                    "prompt-generation-container",
+                );
+
+                promptDiv.innerHTML = "loading...";
+
+                prompts = await fetchPrompts(topic);
+
+                promptDiv.innerHTML = generatePromptComponentList(prompts);
+            }
+
+            async function fetchPrompts(topic) {
+                const userPrompt = `I'm a college professor writing research report on ${topic} and need help coming up with diverse search queries. Please generate 5-15 search queries that would be useful for use with a search engine like Google. Each query should be 5-10 words. Output using the JSON schema provided.`;
+
+                const systemPrompt =
+                    "You are a graduate assistant for a Professor at a prestigious US university. The user will ask you to help generate a search query. Respond with 5-15 search queries. Each query should be a string in a list, returned as a JSON array.";
+
+                response_schema = {
+                    type: "json_schema",
+                    json_schema: {
+                        name: "prompt_array",
+                        schema: {
+                            type: "array",
+                            items: {
+                                type: "string",
+                                minLength: 1,
+                                maxLength: 100,
+                            },
+                        },
+                    },
+                };
+
+                const response = await fetch(
+                    "http://192.168.0.33:1234/v1/chat/completions",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer fake`,
+                        },
+                        body: JSON.stringify({
+                            model: "gemma-3-12b-it",
+                            messages: [
+                                { role: "system", content: systemPrompt },
+                                { role: "user", content: userPrompt },
+                            ],
+                            response_format: response_schema,
+                        }),
+                    },
+                );
+
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.statusText}`);
+                }
+
+                const completion = await response.json();
+
+                const promptResults = JSON.parse(
+                    completion.choices[0].message.content,
+                );
+
+                return promptResults;
+            }
+
+            function removePrompt(sanitizedPrompt) {
+                const promptDiv = document.getElementById(
+                    "prompt-generation-container",
+                );
+
+                prompts = prompts.filter(
+                    (p) => sanitizePrompt(p) !== sanitizedPrompt,
+                );
+
+                promptDiv.innerHTML = generatePromptComponentList(prompts);
+            }
+
+            function generatePromptComponentList(prompts) {
+                return `<ul>${prompts.map((prompt) => generatePromptComponent(prompt)).join("\n")}</ul>`;
+            }
+
+            function generatePromptComponent(prompt) {
+                const sanitizedPrompt = sanitizePrompt(prompt);
+
+                return `<li id="${sanitizedPrompt}">${prompt}<button onclick="removePrompt('${sanitizedPrompt}')">Remove</button></li>`;
+            }
+
+            function sanitizePrompt(str) {
+                return (
+                    str
+                        // Convert to lowercase (optional)
+                        .toLowerCase()
+                        // Replace invalid characters with hyphens
+                        .replace(/[^a-z0-9\-_\.]/g, "-")
+                        // Ensure it doesn't start with a digit
+                        .replace(/^[0-9]/, "")
+                        // Remove multiple hyphens
+                        .replace(/-+/g, "-")
+                        // Trim hyphens from start and end
+                        .replace(/^-|-$/g, "")
+                );
+            }
+
+            async function findAndDisplaySearchResults(apiKey) {
+                const searchResultsDiv =
+                    document.getElementById("search-results");
+
+                searchResultsDiv.innerHTML = `
+                   <p>Finding search results...</p>
+               `;
+
+                for (const prompt of prompts) {
+                    const urlsFromSearchResults = await searchForPrompt(
+                        apiKey,
+                        prompt,
+                    );
+
+                    urls.push(...urlsFromSearchResults);
+                }
+
+                displaySearchResults(urls);
+            }
+
+            function moveToNextUrl(url) {
+                currentUrlIndex++;
+
+                displaySearchResults(urls);
+            }
+
+            function addUrlToFinalList(url) {
+                finalUrls.push(url);
+                currentUrlIndex++;
+
+                displaySearchResults(urls);
+            }
+
+            function displaySearchResults(urls) {
+                if (currentUrlIndex >= urls.length) {
+                    const searchResultsDiv =
+                        document.getElementById("search-results");
+                    searchResultsDiv.innerHTML = `
+                     <p>No more URLs to display.</p>
+                 `;
+                } else {
+                    const currentUrl = urls[currentUrlIndex];
+
+                    const searchResultsDiv =
+                        document.getElementById("search-results");
+
+                    searchResultsDiv.innerHTML = `
+                         <p>URL ${currentUrlIndex} of ${urls.length}: <a href="${currentUrl}" target="_blank">${currentUrl}</a></p>
+                         <button onclick="moveToNextUrl('${currentUrl}')">Skip URL</button>
+                         <button onclick="addUrlToFinalList('${currentUrl}')">Add URL to List</button>
+                         <iframe src="${currentUrl}" loading="lazy" width="100%" height="500px"></iframe>
+                 `;
+                }
+            }
+
+            async function searchForPrompt(apiKey, searchTerm) {
+                const options = {
+                    method: "POST",
+                    headers: {
+                        accept: "application/json",
+                        "content-type": "application/json",
+                        "x-api-key": apiKey,
+                    },
+                    body: JSON.stringify({
+                        query: searchTerm,
+                        excludeDomains: EXCLUDED_DOMAINS,
+                    }),
+                };
+
+                const rawSearchResults = await fetch(
+                    "https://api.exa.ai/search",
+                    options,
+                );
+
+                const searchResults = await rawSearchResults.json();
+
+                const searchResultUrls = searchResults.results.map(
+                    (result) => result.url,
+                );
+
+                return searchResultUrls;
+            }
+
+            async function uploadUrlsToReadwise(tag, apiKey) {
+                const readwiseStatusParagraph = document.getElementById(
+                    "readwise-upload-status",
+                );
+
+                readwiseStatusParagraph.textContent =
+                    "Uploading URLs to Readwise...";
+
+                for (const url of finalUrls) {
+                    const response = await uploadUrlToReadwiseWithRetry(
+                        url,
+                        tag,
+                        apiKey,
+                    );
+                }
+
+                readwiseStatusParagraph.textContent = `Uploading ${finalUrls.length} URLs to Readwise!`;
+            }
+
+            async function uploadUrlToReadwiseWithRetry(
+                url,
+                tag,
+                apiKey,
+                retries = 0,
+            ) {
+                try {
+                    const response = await fetch(
+                        "https://readwise.io/api/v3/save/",
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Token ${apiKey}`,
+                            },
+                            body: JSON.stringify({
+                                url,
+                                tags: tag ? [tag] : null,
+                                location: "later",
+                            }),
+                        },
+                    );
+
+                    const data = await response.json();
+
+                    if ("detail" in data && data.detail.includes("throttled")) {
+                        throw new Error(`throttled on retry #${retries}...`);
+                    }
+
+                    return data;
+                } catch (error) {
+                    console.log("backing off to retry...", error);
+                    if (retries < MAX_RETRIES) {
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, INITIAL_BACKOFF),
+                        );
+                        return uploadUrlToReadwiseWithRetry(
+                            url,
+                            tag,
+                            apiKey,
+                            retries + 1,
+                        );
+                    }
+
+                    throw new Error(`Max retries reached (${MAX_RETRIES})`);
+                }
+            }
+        </script>
+    </head>
+    <body>
+        <h1>Prompt Generation</h1>
+
+        <input
+            type="text"
+            id="prompt-input"
+            placeholder="Enter your prompt here"
+        />
+
+        <button
+            onclick="fetchAndDisplayPrompts(document.getElementById('prompt-input').value)"
+        >
+            Generate Prompt
+        </button>
+
+        <div>
+            <h1>Prompt Results</h1>
+
+            <div id="prompt-generation-container">
+                <p>Results will appear here</p>
+            </div>
+        </div>
+
+        <div id="search-setup">
+            <h1>Search Results</h1>
+
+            <input
+                type="text"
+                id="api-key"
+                placeholder="Enter your search API key here"
+            />
+            <button
+                onclick="findAndDisplaySearchResults(document.getElementById('api-key').value)"
+            >
+                Search With Prompts
+            </button>
+        </div>
+
+        <div id="search-results"></div>
+
+        <div id="readwise-upload">
+            <h1>Save Results to Readwise</h1>
+            <input type="text" id="readwise-tag" placeholder="readwise tag" />
+            <input type="text" id="readwise-api-key" placeholder="api key" />
+
+            <p id="readwise-upload-status"></p>
+
+            <button
+                onclick="uploadUrlsToReadwise(document.getElementById('readwise-tag').value, document.getElementById('readwise-api-key').value)"
+            >
+                Upload Urls to Readwise
+            </button>
+        </div>
+    </body>
+</html>
