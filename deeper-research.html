@@ -62,7 +62,7 @@
                 };
 
                 const response = await fetch(
-                    "http://192.168.0.33:1234/v1/chat/completions",
+                    "http://10.0.0.7:1234/v1/chat/completions",
                     {
                         method: "POST",
                         headers: {
@@ -70,7 +70,7 @@
                             Authorization: `Bearer fake`,
                         },
                         body: JSON.stringify({
-                            model: "gemma-3-12b-it",
+                            model: "liquid/lfm2-1.2b",
                             messages: [
                                 { role: "system", content: systemPrompt },
                                 { role: "user", content: userPrompt },
@@ -145,7 +145,14 @@
                         prompt,
                     );
 
-                    urls.push(...urlsFromSearchResults);
+                    console.log("urls before filtering: ", urls.length);
+
+                    const urlSet = new Set(urls);
+                    const uniqueUrls = Array.from(urlSet);
+
+                    console.log("urls after filtering: ", uniqueUrls.length);
+
+                    displaySearchResults(uniqueUrls);
                 }
 
                 displaySearchResults(urls);
@@ -219,8 +226,7 @@
                     "readwise-upload-status",
                 );
 
-                readwiseStatusParagraph.textContent =
-                    "Uploading URLs to Readwise...";
+                readwiseStatusParagraph.textContent = `Uploading ${finalUrls.length} to Readwise...`;
 
                 for (const url of finalUrls) {
                     const response = await uploadUrlToReadwiseWithRetry(
@@ -230,7 +236,7 @@
                     );
                 }
 
-                readwiseStatusParagraph.textContent = `Uploading ${finalUrls.length} URLs to Readwise!`;
+                readwiseStatusParagraph.textContent = `Uploaded ${finalUrls.length} URLs to Readwise!`;
             }
 
             async function uploadUrlToReadwiseWithRetry(
