@@ -4,11 +4,8 @@
     <head>
         <title>Prompt Generation</title>
         <script>
-            let prompts = [];
-            let urls = [];
-            let finalUrls = [];
-            let currentUrlIndex = 0;
-
+            const OPENAI_URL = "http://10.0.0.7:1234/v1/chat/completions";
+            const LM_STUDIO_MODEL = "google/gemma-3n-e4b";
             const MAX_RETRIES = 100;
             const INITIAL_BACKOFF = 60010; // in milliseconds
             const EXCLUDED_DOMAINS = [
@@ -27,6 +24,11 @@
                 "jstor.org",
                 "academia.edu",
             ];
+
+            let prompts = [];
+            let urls = [];
+            let finalUrls = [];
+            let currentUrlIndex = 0;
 
             async function fetchAndDisplayPrompts(topic) {
                 const promptDiv = document.getElementById(
@@ -61,24 +63,21 @@
                     },
                 };
 
-                const response = await fetch(
-                    "http://10.0.0.7:1234/v1/chat/completions",
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            Authorization: `Bearer fake`,
-                        },
-                        body: JSON.stringify({
-                            model: "liquid/lfm2-1.2b",
-                            messages: [
-                                { role: "system", content: systemPrompt },
-                                { role: "user", content: userPrompt },
-                            ],
-                            response_format: response_schema,
-                        }),
+                const response = await fetch(OPENAI_URL, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer fake`,
                     },
-                );
+                    body: JSON.stringify({
+                        model: LM_STUDIO_MODEL,
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            { role: "user", content: userPrompt },
+                        ],
+                        response_format: response_schema,
+                    }),
+                });
 
                 if (!response.ok) {
                     throw new Error(`Error: ${response.statusText}`);
@@ -91,6 +90,18 @@
                 );
 
                 return promptResults;
+            }
+
+            function addPrompt(prompt) {
+                if (!prompt) return;
+
+                const promptDiv = document.getElementById(
+                    "prompt-generation-container",
+                );
+
+                prompts.push(prompt);
+
+                promptDiv.innerHTML = generatePromptComponentList(prompts);
             }
 
             function removePrompt(sanitizedPrompt) {
@@ -106,13 +117,35 @@
             }
 
             function generatePromptComponentList(prompts) {
-                return `<ul>${prompts.map((prompt) => generatePromptComponent(prompt)).join("\n")}</ul>`;
+                return `<ul>${prompts.map((prompt) => generatePromptComponent(prompt)).join("\n")}<li><input id="add-prompt-input" type="text" placeholder="Enter prompt"/><button onclick="addPrompt(document.getElementById('add-prompt-input').value)">Add</button></li></ul>`;
             }
 
             function generatePromptComponent(prompt) {
                 const sanitizedPrompt = sanitizePrompt(prompt);
+                const userVisiblePrompt = cleanPromptForUser(prompt);
 
-                return `<li id="${sanitizedPrompt}">${prompt}<button onclick="removePrompt('${sanitizedPrompt}')">Remove</button></li>`;
+                return `<li id="${sanitizedPrompt}">${userVisiblePrompt}<button onclick="removePrompt('${sanitizedPrompt}')">Remove</button></li>`;
+            }
+
+            function cleanPromptForUser(prompt) {
+                // google/gemma-3n-e4b tries to do weird things with the prompt
+                try {
+                    const parsedPrompt = JSON.parse(prompt);
+                    const userVisiblePrompt = parsedPrompt?.query;
+                    return userVisiblePrompt;
+                } catch (error) {
+                    console.error(
+                        "Error parsing prompt, continuing to try trimming",
+                        error,
+                    );
+                }
+
+                // liquid/lfm2-1.2b tries to do different weird things with the prompt
+                const trimmedPrompt = prompt.trim();
+
+                const splitString = trimmedPrompt.split("-").join(" ");
+
+                return splitString.replace(/^\/+/, "").replace(/\/+$/, ""); // replace slashes with nothing
             }
 
             function sanitizePrompt(str) {
@@ -147,10 +180,14 @@
 
                     console.log("urls before filtering: ", urls.length);
 
-                    const urlSet = new Set(urls);
-                    const uniqueUrls = Array.from(urlSet);
+                    const urlsWithSearchResults = urls.concat(
+                        urlsFromSearchResults,
+                    );
+                    const urlSet = new Set(urlsWithSearchResults);
 
-                    console.log("urls after filtering: ", uniqueUrls.length);
+                    urls = Array.from(urlSet);
+
+                    console.log("urls after filtering: ", urls.length);
 
                     displaySearchResults(uniqueUrls);
                 }
