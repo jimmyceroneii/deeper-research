@@ -4,7 +4,7 @@
     <head>
         <title>Prompt Generation</title>
         <script>
-            const OPENAI_URL = "http://10.0.0.7:1234/v1/chat/completions";
+            const OPENAI_URL = "http://192.168.0.33:1234/v1/chat/completions";
             const LM_STUDIO_MODEL = "google/gemma-3n-e4b";
             const MAX_RETRIES = 100;
             const INITIAL_BACKOFF = 60010; // in milliseconds
@@ -183,13 +183,12 @@
                     const urlsWithSearchResults = urls.concat(
                         urlsFromSearchResults,
                     );
+
                     const urlSet = new Set(urlsWithSearchResults);
 
                     urls = Array.from(urlSet);
 
                     console.log("urls after filtering: ", urls.length);
-
-                    displaySearchResults(urls);
                 }
 
                 displaySearchResults(urls);
