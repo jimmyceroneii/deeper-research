@@ -3,8 +3,31 @@
 <html>
     <head>
         <title>Prompt Generation</title>
+        <script src="https://cdn.tailwindcss.com"></script>
         <script>
-            const OPENAI_URL = "http://192.168.0.33:1234/v1/chat/completions";
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        colors: {
+                            background: "#ffffff",
+                            foreground: "#030213",
+                            card: "#ffffff",
+                            "card-foreground": "#030213",
+                            primary: "#030213",
+                            "primary-foreground": "#ffffff",
+                            secondary: "#f3f3f5",
+                            "secondary-foreground": "#030213",
+                            muted: "#ececf0",
+                            "muted-foreground": "#717182",
+                            border: "rgba(0, 0, 0, 0.1)",
+                            "input-background": "#f3f3f5",
+                        },
+                    },
+                },
+            };
+        </script>
+        <script>
+            const OPENAI_URL = "http://192.168.0.90:1234/v1/chat/completions";
             const LM_STUDIO_MODEL = "google/gemma-3n-e4b";
             const MAX_RETRIES = 100;
             const INITIAL_BACKOFF = 60010; // in milliseconds
@@ -35,7 +58,8 @@
                     "prompt-generation-container",
                 );
 
-                promptDiv.innerHTML = "loading...";
+                promptDiv.innerHTML =
+                    '<p class="text-muted-foreground">Loading...</p>';
 
                 prompts = await fetchPrompts(topic);
 
@@ -117,14 +141,14 @@
             }
 
             function generatePromptComponentList(prompts) {
-                return `<ul>${prompts.map((prompt) => generatePromptComponent(prompt)).join("\n")}<li><input id="add-prompt-input" type="text" placeholder="Enter prompt"/><button onclick="addPrompt(document.getElementById('add-prompt-input').value)">Add</button></li></ul>`;
+                return `<ul class="space-y-2">${prompts.map((prompt) => generatePromptComponent(prompt)).join("\n")}<li class="flex gap-2 pt-2 border-t border-border"><input id="add-prompt-input" type="text" placeholder="Enter prompt" class="flex-1 px-3 py-2 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"/><button onclick="addPrompt(document.getElementById('add-prompt-input').value)" class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">Add</button></li></ul>`;
             }
 
             function generatePromptComponent(prompt) {
                 const sanitizedPrompt = sanitizePrompt(prompt);
                 const userVisiblePrompt = cleanPromptForUser(prompt);
 
-                return `<li id="${sanitizedPrompt}">${userVisiblePrompt}<button onclick="removePrompt('${sanitizedPrompt}')">Remove</button></li>`;
+                return `<li id="${sanitizedPrompt}" class="flex items-center justify-between p-3 bg-card border border-border rounded-lg"><span class="text-foreground">${userVisiblePrompt}</span><button onclick="removePrompt('${sanitizedPrompt}')" class="px-3 py-1 text-sm bg-secondary text-secondary-foreground rounded hover:bg-secondary/80 transition-colors">Remove</button></li>`;
             }
 
             function cleanPromptForUser(prompt) {
@@ -164,31 +188,29 @@
                 );
             }
 
-            async function findAndDisplaySearchResults(apiKey) {
+            async function findAndDisplaySearchResults() {
                 const searchResultsDiv =
                     document.getElementById("search-results");
 
                 searchResultsDiv.innerHTML = `
-                   <p>Finding search results...</p>
+                   <p class="text-muted-foreground">Finding search results...</p>
                `;
 
                 for (const prompt of prompts) {
-                    const urlsFromSearchResults = await searchForPrompt(
-                        apiKey,
-                        prompt,
-                    );
+                    const urlsFromSearchResults = await searchForPrompt(prompt);
 
                     console.log("urls before filtering: ", urls.length);
 
                     const urlsWithSearchResults = urls.concat(
                         urlsFromSearchResults,
                     );
-
                     const urlSet = new Set(urlsWithSearchResults);
 
                     urls = Array.from(urlSet);
 
                     console.log("urls after filtering: ", urls.length);
+
+                    displaySearchResults(urls);
                 }
 
                 displaySearchResults(urls);
@@ -212,7 +234,10 @@
                     const searchResultsDiv =
                         document.getElementById("search-results");
                     searchResultsDiv.innerHTML = `
-                     <p>No more URLs to display.</p>
+                     <div class="text-center py-8">
+                       <p class="text-muted-foreground mb-4">No more URLs to display.</p>
+                       <p class="text-sm text-muted-foreground">You've reviewed all ${urls.length} search results.</p>
+                     </div>
                  `;
                 } else {
                     const currentUrl = urls[currentUrlIndex];
@@ -220,22 +245,62 @@
                     const searchResultsDiv =
                         document.getElementById("search-results");
 
+                    // Extract domain for display
+                    const urlObj = new URL(currentUrl);
+                    const domain = urlObj.hostname;
+
                     searchResultsDiv.innerHTML = `
-                         <p>URL ${currentUrlIndex} of ${urls.length}: <a href="${currentUrl}" target="_blank">${currentUrl}</a></p>
-                         <button onclick="moveToNextUrl('${currentUrl}')">Skip URL</button>
-                         <button onclick="addUrlToFinalList('${currentUrl}')">Add URL to List</button>
-                         <iframe src="${currentUrl}" loading="lazy" width="100%" height="500px"></iframe>
-                 `;
+            <div class="max-w-4xl mx-auto">
+              <!-- Header -->
+              <div class="text-center mb-6">
+                <div class="text-sm text-muted-foreground mb-2">
+                  Result ${currentUrlIndex + 1} of ${urls.length}
+                </div>
+                <div class="w-full bg-secondary rounded-full h-2 mb-4">
+                  <div class="bg-primary h-2 rounded-full transition-all duration-300" style="width: ${((currentUrlIndex + 1) / urls.length) * 100}%"></div>
+                </div>
+              </div>
+
+              <!-- URL Card -->
+              <div class="bg-card border border-border rounded-lg p-6 shadow-sm mb-6">
+                <h2 class="text-xl font-medium mb-3 text-primary hover:underline cursor-pointer">
+                  <a href="${currentUrl}" target="_blank">${currentUrl}</a>
+                </h2>
+
+                <div class="text-sm text-muted-foreground mb-4 font-mono">
+                  ${domain}
+                </div>
+
+                <div class="text-xs text-muted-foreground border-t border-border pt-3">
+                  Click to open in new tab
+                </div>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="flex gap-4 justify-center mb-6">
+                <button onclick="moveToNextUrl('${currentUrl}')" class="px-6 py-3 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors">
+                  Skip
+                </button>
+                <button onclick="addUrlToFinalList('${currentUrl}')" class="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
+                  Add to List
+                </button>
+              </div>
+
+              <!-- Preview iframe -->
+              <div class="bg-card border border-border rounded-lg overflow-hidden">
+                <iframe src="${currentUrl}" loading="lazy" width="100%" height="500px" class="w-full"></iframe>
+              </div>
+            </div>
+          `;
                 }
             }
 
-            async function searchForPrompt(apiKey, searchTerm) {
+            async function searchForPrompt(searchTerm) {
                 const options = {
                     method: "POST",
                     headers: {
                         accept: "application/json",
                         "content-type": "application/json",
-                        "x-api-key": apiKey,
                     },
                     body: JSON.stringify({
                         query: searchTerm,
@@ -244,7 +309,7 @@
                 };
 
                 const rawSearchResults = await fetch(
-                    "https://api.exa.ai/search",
+                    "http://localhost:8081/exa/search",
                     options,
                 );
 
@@ -262,7 +327,7 @@
                     "readwise-upload-status",
                 );
 
-                readwiseStatusParagraph.textContent = `Uploading ${finalUrls.length} to Readwise...`;
+                readwiseStatusParagraph.innerHTML = `<p class="text-muted-foreground">Uploading ${finalUrls.length} URLs to Readwise...</p>`;
 
                 for (const url of finalUrls) {
                     const response = await uploadUrlToReadwiseWithRetry(
@@ -272,7 +337,7 @@
                     );
                 }
 
-                readwiseStatusParagraph.textContent = `Uploaded ${finalUrls.length} URLs to Readwise!`;
+                readwiseStatusParagraph.innerHTML = `<p class="text-green-600">Uploaded ${finalUrls.length} URLs to Readwise!</p>`;
             }
 
             async function uploadUrlToReadwiseWithRetry(
@@ -324,58 +389,112 @@
             }
         </script>
     </head>
-    <body>
-        <h1>Prompt Generation</h1>
-
-        <input
-            type="text"
-            id="prompt-input"
-            placeholder="Enter your prompt here"
-        />
-
-        <button
-            onclick="fetchAndDisplayPrompts(document.getElementById('prompt-input').value)"
-        >
-            Generate Prompt
-        </button>
-
-        <div>
-            <h1>Prompt Results</h1>
-
-            <div id="prompt-generation-container">
-                <p>Results will appear here</p>
+    <body class="min-h-screen bg-background text-foreground">
+        <div class="container mx-auto px-4 py-8 max-w-4xl">
+            <!-- Main Header -->
+            <div class="text-center mb-12">
+                <h1 class="text-3xl font-semibold mb-2">
+                    Research Link Discovery
+                </h1>
+                <p class="text-muted-foreground">
+                    Generate search queries and review links one at a time
+                </p>
             </div>
-        </div>
 
-        <div id="search-setup">
-            <h1>Search Results</h1>
+            <!-- Prompt Generation Section -->
+            <div class="bg-card border border-border rounded-lg p-6 mb-8">
+                <h2 class="text-xl font-medium mb-4">
+                    1. Generate Search Prompts
+                </h2>
+                <div class="flex gap-3 mb-4">
+                    <input
+                        type="text"
+                        id="prompt-input"
+                        placeholder="Enter your research topic..."
+                        class="flex-1 px-4 py-3 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <button
+                        onclick="fetchAndDisplayPrompts(document.getElementById('prompt-input').value)"
+                        class="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors whitespace-nowrap"
+                    >
+                        Generate Prompts
+                    </button>
+                </div>
 
-            <input
-                type="text"
-                id="api-key"
-                placeholder="Enter your search API key here"
-            />
-            <button
-                onclick="findAndDisplaySearchResults(document.getElementById('api-key').value)"
+                <div id="prompt-generation-container">
+                    <p class="text-muted-foreground text-center py-4">
+                        Enter a topic above to generate search prompts
+                    </p>
+                </div>
+            </div>
+
+            <!-- Search Setup Section -->
+            <div
+                id="search-setup"
+                class="bg-card border border-border rounded-lg p-6 mb-8"
             >
-                Search With Prompts
-            </button>
-        </div>
+                <h2 class="text-xl font-medium mb-4">2. Search for Links</h2>
+                <div class="flex gap-3">
+                    <button
+                        onclick="findAndDisplaySearchResults()"
+                        class="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors whitespace-nowrap"
+                    >
+                        Start Search
+                    </button>
+                </div>
+            </div>
 
-        <div id="search-results"></div>
+            <!-- Search Results Section -->
+            <div class="mb-8">
+                <h2 class="text-xl font-medium mb-6 text-center">
+                    3. Review Search Results
+                </h2>
+                <div id="search-results">
+                    <div class="text-center py-8">
+                        <p class="text-muted-foreground">
+                            Search results will appear here after you start the
+                            search
+                        </p>
+                    </div>
+                </div>
+            </div>
 
-        <div id="readwise-upload">
-            <h1>Save Results to Readwise</h1>
-            <input type="text" id="readwise-tag" placeholder="readwise tag" />
-            <input type="text" id="readwise-api-key" placeholder="api key" />
-
-            <p id="readwise-upload-status"></p>
-
-            <button
-                onclick="uploadUrlsToReadwise(document.getElementById('readwise-tag').value, document.getElementById('readwise-api-key').value)"
+            <!-- Readwise Upload Section -->
+            <div
+                id="readwise-upload"
+                class="bg-card border border-border rounded-lg p-6"
             >
-                Upload Urls to Readwise
-            </button>
+                <h2 class="text-xl font-medium mb-4">4. Save to Readwise</h2>
+                <div class="space-y-3">
+                    <div class="flex gap-3">
+                        <input
+                            type="text"
+                            id="readwise-tag"
+                            placeholder="Readwise tag (optional)"
+                            class="flex-1 px-4 py-3 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                        <input
+                            type="text"
+                            id="readwise-api-key"
+                            placeholder="Readwise API key"
+                            class="flex-1 px-4 py-3 bg-input-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                    </div>
+
+                    <div id="readwise-upload-status" class="text-center py-2">
+                        <span class="text-sm text-muted-foreground"
+                            >0 URLs saved to your list</span
+                        >
+                    </div>
+
+                    <button
+                        onclick="uploadUrlsToReadwise(document.getElementById('readwise-tag').value, document.getElementById('readwise-api-key').value)"
+                        class="w-full px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                    >
+                        Upload URLs to Readwise
+                    </button>
+                </div>
+            </div>
         </div>
     </body>
 </html>

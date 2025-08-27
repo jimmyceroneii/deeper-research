@@ -1,0 +1,12 @@
+:8081 {
+	root * {env.CADDY_PATH}
+
+	@exa path /exa/*
+	uri @exa strip_prefix /exa
+	reverse_proxy @exa https://api.exa.ai {
+		header_up Host "api.exa.ai"
+		header_up Authorization "{env.EXA_API_KEY}"
+	}
+
+	file_server browse
+}
